@@ -18,6 +18,8 @@
 
 package com.trifork.bitcask;
 
+import com.google.protobuf.ByteString;
+
 /** Iterator for folding over keys */
 public interface KeyIter<T> {
 
@@ -32,6 +34,6 @@ public interface KeyIter<T> {
 	 * @see BitCaskFile#fold_keys(KeyIter, Object)
 	 */
 
-	T each(byte[] key, int tstamp, long entry_pos, int entry_size, T acc);
+	T each(ByteString key, int tstamp, long entry_pos, int entry_size, T acc);
 	
 }

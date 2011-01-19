@@ -27,7 +27,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.zip.CRC32;
+
+import com.google.protobuf.ByteString;
 
 public class BitCaskFile {
 
@@ -53,12 +54,60 @@ public class BitCaskFile {
 		this.wch_hint = wch_hint;
 		this.write_offset = new AtomicLong(wch.position());
 	}
+	
+	public ByteBuffer[] read(long offset, int length) throws IOException {
+		
+		byte[] header = new byte[HEADER_SIZE];
 
-	public synchronized void write(byte[] key, byte[] value) throws IOException {
+		ByteBuffer h = ByteBuffer.wrap(header);
+		long read = IO.read(rch, h, offset);
+		if (read != HEADER_SIZE) {
+			throw new IOException("cannot read header @ 0x"+Long.toHexString(offset));
+		}
+
+		h.rewind();
+		int crc32 = h.getInt();
+		int tstamp = h.getInt();
+		int key_len = h.getChar();
+		int val_len = h.getInt();
+
+		int key_val_size = key_len + val_len;
+		
+		if (length != (HEADER_SIZE + key_val_size)) {
+			throw new IOException("bad entry size");
+		}
+		
+		byte[] kv = new byte[key_val_size];
+		ByteBuffer key_val = ByteBuffer.wrap(kv);
+
+		long kv_pos = offset + HEADER_SIZE;
+		read = IO.read(rch, key_val, kv_pos);
+		if (read != key_val_size) {
+			throw new IOException("cannot read key+value @ 0x"+Long.toHexString(offset));
+		}
+
+		CRC32 crc = new CRC32();
+		crc.reset();
+		crc.update(header, 4, HEADER_SIZE - 4);
+		crc.update(kv);
+
+		if (crc.getValue() != crc32) {
+			throw new IOException("Mismatching CRC code");
+		}
+
+		ByteBuffer[] result = new ByteBuffer[] {
+				ByteBuffer.wrap(kv, 0, key_len),
+				ByteBuffer.wrap(kv, key_len, val_len)
+		};
+		
+		return result;
+	}
+
+	public void write(ByteString key, ByteString value) throws IOException {
 
 		int tstamp = tstamp();
-		int key_size = key.length;
-		int value_size = value.length;
+		int key_size = key.size();
+		int value_size = value.size();
 
 		ByteBuffer[] vec = file_entry(key, value, tstamp, key_size, value_size);
 
@@ -72,13 +121,13 @@ public class BitCaskFile {
 
 	}
 
-	private ByteBuffer[] file_entry(byte[] key, byte[] value, int tstamp,
+	private ByteBuffer[] file_entry(ByteString key, ByteString value, int tstamp,
 			int key_size, int value_size) {
 		byte[] header = new byte[HEADER_SIZE];
 		ByteBuffer h = ByteBuffer.wrap(header);
 
-		ByteBuffer k = ByteBuffer.wrap(key);
-		ByteBuffer v = ByteBuffer.wrap(value);
+		ByteBuffer k = key.asReadOnlyByteBuffer();
+		ByteBuffer v = value.asReadOnlyByteBuffer();
 
 		h.putInt(4, tstamp);
 		h.putShort(8, (short) key_size);
@@ -96,18 +145,18 @@ public class BitCaskFile {
 		return vec;
 	}
 
-	private ByteBuffer[] hint_file_entry(byte[] key, int tstamp,
+	private ByteBuffer[] hint_file_entry(ByteString key, int tstamp,
 			long entry_offset, int entry_size) {
 
 		byte[] header = new byte[HINT_HEADER_SIZE];
 		ByteBuffer h = ByteBuffer.wrap(header);
 
 		h.putInt(0, tstamp);
-		h.putShort(4, (short) key.length);
+		h.putShort(4, (short) key.size());
 		h.putInt(6, entry_size);
 		h.putLong(10, entry_offset);
 
-		return new ByteBuffer[] { h, ByteBuffer.wrap(key) };
+		return new ByteBuffer[] { h, key.asReadOnlyByteBuffer() };
 	}
 
 	private static int tstamp() {
@@ -183,28 +232,26 @@ public class BitCaskFile {
 			int key_len = h.getChar();
 			int val_len = h.getInt();
 
-			byte[] k = new byte[key_len];
-			byte[] v = new byte[val_len];
-			ByteBuffer key = ByteBuffer.wrap(k);
-			ByteBuffer val = ByteBuffer.wrap(v);
+			byte[] kv = new byte[key_len + val_len];
+			ByteBuffer key_val = ByteBuffer.wrap(kv);
 
 			long kv_pos = pos + HEADER_SIZE;
-			read = IO.read(rch, new ByteBuffer[] { key, val }, kv_pos);
+			read = IO.read(rch, key_val, kv_pos);
 			if (read != (key_len + val_len)) {
 				return acc;
 			}
 
 			crc.reset();
 			crc.update(header, 4, HEADER_SIZE - 4);
-			crc.update(k);
-			crc.update(v);
+			crc.update(kv);
 
 			if (crc.getValue() != crc32) {
 				throw new IOException("Mismatching CRC code");
 			}
 
 			int entry_length = HEADER_SIZE + key_len + val_len;
-			acc = iter.each(k, v, tstamp, pos, entry_length, acc);
+			acc = iter.each(ByteString.copyFrom(kv, 0, key_len), 
+							ByteString.copyFrom(kv, key_len, val_len), tstamp, pos, entry_length, acc);
 		}
 
 		return acc;
@@ -255,7 +302,7 @@ public class BitCaskFile {
 					return acc;
 				}
 
-				acc = iter.each(k, tstamp, entry_off, entry_len, acc);
+				acc = iter.each(ByteString.copyFrom(k), tstamp, entry_off, entry_len, acc);
 			}
 		} finally {
 			fi.close();
@@ -289,7 +336,7 @@ public class BitCaskFile {
 			}
 
 			int entry_size = HEADER_SIZE + key_len + val_len;
-			acc = iter.each(k, tstamp, pos, entry_size, acc);
+			acc = iter.each(ByteString.copyFrom(k), tstamp, pos, entry_size, acc);
 
 			pos += entry_size;
 		}
@@ -346,55 +393,6 @@ public class BitCaskFile {
 		}
 	}
 
-	//
-	// Simple test
-	//
-	
-	public static void main(String[] args) throws IOException,
-			InterruptedException {
 
-		File dir = new File("/tmp/foo");
-		dir.mkdirs();
-		Process p = Runtime.getRuntime().exec(
-				new String[] { "rm", "-Rf", "/tmp/foo" });
-		p.waitFor();
-
-		BitCaskFile f = BitCaskFile.create(dir, 1);
-
-		for (int i = 0; i < 2; i++) {
-
-			String key = "k" + i;
-			String value = "v" + i + " xxx ";
-
-			f.write(key.getBytes(), value.getBytes());
-		}
-
-		f.close();
-
-		ArrayList<String> al1 = new ArrayList<String>();
-		ArrayList<String> al2 = new ArrayList<String>();
-
-		KeyIter<ArrayList<String>> iter = new KeyIter<ArrayList<String>>() {
-
-			@Override
-			public ArrayList<String> each(byte[] key, int tstamp, long off, int sz,
-					ArrayList<String> acc) {
-
-				acc.add(new String(key) + ":" + tstamp + ":" + off + ":" + sz);
-
-				return acc;
-
-			}
-		};
-
-		f = BitCaskFile.open(dir, 1);
-		f.fold_keys_datafile(iter, al1);
-		f.fold_keys_hintfile(iter, al2);
-
-		System.out.println("DATA: " + al1);
-		System.out.println("HINT: " + al2);
-
-		System.out.println(al1.equals(al2));
-	}
 
 }

@@ -1,6 +1,7 @@
 package com.trifork.bitcask;
 
 import static net.java.quickcheck.generator.CombinedGenerators.byteArrays;
+import static net.java.quickcheck.generator.PrimitiveGenerators.strings;
 import static net.java.quickcheck.generator.CombinedGeneratorsIterables.somePairs;
 
 import java.io.File;
@@ -12,6 +13,8 @@ import net.java.quickcheck.collection.Pair;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
+
+import com.google.protobuf.ByteString;
 
 public class BitCaskFileTest {
 
@@ -47,8 +50,9 @@ public class BitCaskFileTest {
 	@Test
 	public void testHintFile() throws IOException {
 
-		for (Pair<byte[], byte[]> kv : somePairs(byteArrays(), byteArrays())) {
-			data_file.write(kv.getFirst(), kv.getSecond());
+		for (Pair<String, String> kv : somePairs(strings(), strings())) {
+			data_file.write(ByteString.copyFromUtf8(kv.getFirst()),
+							ByteString.copyFromUtf8(kv.getSecond()));
 		}
 
 		ArrayList<String> al1 = new ArrayList<String>();
@@ -57,10 +61,10 @@ public class BitCaskFileTest {
 		KeyIter<ArrayList<String>> iter = new KeyIter<ArrayList<String>>() {
 
 			@Override
-			public ArrayList<String> each(byte[] key, int tstamp, long off,
+			public ArrayList<String> each(ByteString key, int tstamp, long off,
 					int sz, ArrayList<String> acc) {
 
-				acc.add(new String(key) + ":" + tstamp + ":" + off + ":" + sz);
+				acc.add(key.toStringUtf8() + ":" + tstamp + ":" + off + ":" + sz);
 
 				return acc;
 

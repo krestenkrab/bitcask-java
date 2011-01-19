@@ -18,6 +18,8 @@
 
 package com.trifork.bitcask;
 
+import com.google.protobuf.ByteString;
+
 /** Iterator interface for key+value */
 public interface EntryIter<T> {
 
@@ -32,7 +34,7 @@ public interface EntryIter<T> {
 	 * 
 	 * @see BitCaskFile#fold(EntryIter, Object)
 	 */
-	T each(byte[] key, byte[] value, int tstamp, long entry_pos,
+	T each(ByteString key, ByteString value, int tstamp, long entry_pos,
 			int entry_size, T acc);
 
 }
