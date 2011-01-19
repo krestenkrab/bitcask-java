@@ -30,10 +30,11 @@ public interface KeyIter<T> {
 	 * @param entry_size Size of the entry in the data file
 	 * @param acc Accumulator for fold operations
 	 * @return accumulator for next iteration
+	 * @throws Exception 
 	 * 
 	 * @see BitCaskFile#fold_keys(KeyIter, Object)
 	 */
 
-	T each(ByteString key, int tstamp, long entry_pos, int entry_size, T acc);
+	T each(ByteString key, int tstamp, long entry_pos, int entry_size, T acc) throws Exception;
 	
 }

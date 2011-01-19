@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.protobuf.ByteString;
@@ -55,7 +54,7 @@ public class BitCaskFile {
 		this.write_offset = new AtomicLong(wch.position());
 	}
 	
-	public ByteBuffer[] read(long offset, int length) throws IOException {
+	public ByteString[] read(long offset, int length) throws IOException {
 		
 		byte[] header = new byte[HEADER_SIZE];
 
@@ -65,11 +64,10 @@ public class BitCaskFile {
 			throw new IOException("cannot read header @ 0x"+Long.toHexString(offset));
 		}
 
-		h.rewind();
-		int crc32 = h.getInt();
-		int tstamp = h.getInt();
-		int key_len = h.getChar();
-		int val_len = h.getInt();
+		int crc32 = h.getInt(0);
+		/* int tstamp = h.getInt(); */ 
+		int key_len = h.getChar(8);
+		int val_len = h.getInt(10);
 
 		int key_val_size = key_len + val_len;
 		
@@ -95,14 +93,14 @@ public class BitCaskFile {
 			throw new IOException("Mismatching CRC code");
 		}
 
-		ByteBuffer[] result = new ByteBuffer[] {
-				ByteBuffer.wrap(kv, 0, key_len),
-				ByteBuffer.wrap(kv, key_len, val_len)
+		ByteString[] result = new ByteString[] {
+				ByteString.copyFrom(kv, 0, key_len),
+				ByteString.copyFrom(kv, key_len, val_len)
 		};
 		
 		return result;
 	}
-
+	
 	public void write(ByteString key, ByteString value) throws IOException {
 
 		int tstamp = tstamp();
@@ -264,7 +262,7 @@ public class BitCaskFile {
 	}
 
 	/** Fold keys (use hint file if it exists) */
-	public <T> T fold_keys(KeyIter<T> iter, T acc) throws IOException {
+	public <T> T fold_keys(KeyIter<T> iter, T acc) throws Exception {
 		if (hasHintfile()) {
 			return fold_keys_hintfile(iter, acc);
 		} else {
@@ -272,8 +270,9 @@ public class BitCaskFile {
 		}
 	}
 
-	/** Fold keys by reading through the hintfile */
-	public <T> T fold_keys_hintfile(KeyIter<T> iter, T acc) throws IOException {
+	/** Fold keys by reading through the hintfile 
+	 * @throws Exception */
+	public <T> T fold_keys_hintfile(KeyIter<T> iter, T acc) throws Exception {
 
 		FileInputStream fi;
 		FileChannel ch = (fi = new FileInputStream(hint_filename(filename)))
@@ -310,7 +309,7 @@ public class BitCaskFile {
 	}
 
 	/** Fold keys by reading through the data file */
-	public <T> T fold_keys_datafile(KeyIter<T> iter, T acc) throws IOException {
+	public <T> T fold_keys_datafile(KeyIter<T> iter, T acc) throws Exception {
 
 		byte[] header = new byte[HEADER_SIZE];
 		long pos = 0;

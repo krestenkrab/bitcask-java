@@ -46,9 +46,10 @@ public class BitCaskFileTest {
 	}
 
 	/** create a sample Data+Hint file, and compare the result of
-	 * iterating through the keys of either */
+	 * iterating through the keys of either 
+	 * @throws Exception */
 	@Test
-	public void testHintFile() throws IOException {
+	public void testHintFile() throws Exception {
 
 		for (Pair<String, String> kv : somePairs(strings(), strings())) {
 			data_file.write(ByteString.copyFromUtf8(kv.getFirst()),
@@ -77,6 +78,20 @@ public class BitCaskFileTest {
 
 		Assert.assertEquals(al1, al2);
 
+		data_file.fold_keys_hintfile(new KeyIter<Void>() {
+
+			@Override
+			public Void each(ByteString key, int tstamp, long entryPos,
+					int entrySize, Void acc) throws Exception {
+
+				ByteString[] keyval = data_file.read(entryPos, entrySize);
+				
+				Assert.assertEquals(key, keyval[0]);
+				
+				return null;
+			}
+		}, null);
+		
 	}
 
 }
