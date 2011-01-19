@@ -1,3 +1,5 @@
 .metadata
 .settings
 *.class
+*~
+.DS_Store
