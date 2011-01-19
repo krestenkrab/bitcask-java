@@ -157,8 +157,9 @@ public class BitCaskFile {
 		return new ByteBuffer[] { h, key.asReadOnlyByteBuffer() };
 	}
 
+	/** in bitcask, timestamp is the #seconds in the system */
 	private static int tstamp() {
-		return (int) System.nanoTime();
+		return (int) (System.currentTimeMillis() / 1000L);
 	}
 
 	
