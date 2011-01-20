@@ -31,6 +31,12 @@ import com.google.protobuf.ByteString;
 
 public class BitCaskFile {
 
+	static final BitCaskFile FRESH_FILE = new BitCaskFile();
+	
+	public enum WriteCheck {
+		WRAP, FRESH, OK
+	}
+
 	// 4+4+2+4
 	private static final int HEADER_SIZE = 14;
 
@@ -43,10 +49,12 @@ public class BitCaskFile {
 	FileChannel wch_hint;
 
 	private AtomicLong write_offset;
-	private File filename;
+	final File filename;
+	final int file_id;
 
-	private BitCaskFile(File filename, FileChannel wch, FileChannel wch_hint,
+	private BitCaskFile(int file_id, File filename, FileChannel wch, FileChannel wch_hint,
 			FileChannel rch) throws IOException {
+		this.file_id = file_id;
 		this.filename = filename;
 		this.wch = wch;
 		this.rch = rch;
@@ -54,6 +62,11 @@ public class BitCaskFile {
 		this.write_offset = new AtomicLong(wch.position());
 	}
 	
+	public BitCaskFile() {
+		this.filename = null;
+		this.file_id = -1;
+	}
+
 	public ByteString[] read(long offset, int length) throws IOException {
 		
 		byte[] header = new byte[HEADER_SIZE];
@@ -101,7 +114,7 @@ public class BitCaskFile {
 		return result;
 	}
 	
-	public void write(ByteString key, ByteString value) throws IOException {
+	public BitCaskEntry write(ByteString key, ByteString value) throws IOException {
 
 		int tstamp = tstamp();
 		int key_size = key.size();
@@ -117,6 +130,7 @@ public class BitCaskFile {
 				entry_size);
 		IO.write_fully(wch_hint, hfe);
 
+		return new BitCaskEntry(file_id, tstamp, entry_pos, entry_size);
 	}
 
 	private ByteBuffer[] file_entry(ByteString key, ByteString value, int tstamp,
@@ -158,7 +172,7 @@ public class BitCaskFile {
 	}
 
 	/** in bitcask, timestamp is the #seconds in the system */
-	private static int tstamp() {
+	static int tstamp() {
 		return (int) (System.currentTimeMillis() / 1000L);
 	}
 
@@ -169,7 +183,13 @@ public class BitCaskFile {
 			throws IOException {
 
 		File filename = mk_filename(dirname, tstamp);
-
+		return open(filename);
+	}
+	
+	public static BitCaskFile open(File filename) throws IOException {
+		
+		int tstamp = BitCaskFile.tstamp(filename);
+		
 		FileChannel wch = new FileOutputStream(filename, true).getChannel();
 		FileChannel wch_hint = new FileOutputStream(hint_filename(filename),
 				true).getChannel();
@@ -178,8 +198,7 @@ public class BitCaskFile {
 
 		FileChannel rch = new RandomAccessFile(filename, "r").getChannel();
 
-		return new BitCaskFile(filename, wch, wch_hint, rch);
-
+		return new BitCaskFile(tstamp, filename, wch, wch_hint, rch);
 	}
 
 	/** Create a new bitcask file in named directory */
@@ -208,7 +227,7 @@ public class BitCaskFile {
 
 		FileChannel rch = new RandomAccessFile(filename, "r").getChannel();
 
-		return new BitCaskFile(filename, wch, wch_hint, rch);
+		return new BitCaskFile(tstamp, filename, wch, wch_hint, rch);
 	}
 
 	/** Fold over all entries in this bitcask file */
@@ -373,7 +392,7 @@ public class BitCaskFile {
 	/** 
 	 * Given a directory and a timestamp, construct a data file name.
 	 */
-	private static File mk_filename(File dirname, int tstamp) {
+	static File mk_filename(File dirname, int tstamp) {
 		return new File(dirname, "" + tstamp + ".bitcask.data");
 	}
 
@@ -391,6 +410,26 @@ public class BitCaskFile {
 		} else {
 			return new File(parent, name + ".hint");
 		}
+	}
+
+	public WriteCheck check_write(ByteString key, ByteString value, long maxFileSize) {
+		if (file_id == -1)
+			return WriteCheck.FRESH;
+
+		int size = HEADER_SIZE + key.size() + value.size();
+		
+		if (write_offset.get() + size > maxFileSize) {
+			return WriteCheck.WRAP;
+		} else {
+			return WriteCheck.OK;
+		}
+	}
+
+	public static int tstamp(File file) {
+		String name = file.getName();
+		int idx = name.indexOf('.');
+		int val = Integer.parseInt(name.substring(0, idx));
+		return val;
 	}
 
 

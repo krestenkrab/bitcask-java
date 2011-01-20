@@ -85,6 +85,10 @@ public class BitCaskLock {
 		write_activefile(lock_filename(type, dirname));
 	}
 		
+	public void write_activefile(BitCaskFile file) throws IOException {
+		write_activefile(file.filename);
+	}
+		
 	private void write_activefile(File activeFilename) throws IOException {
 		
 		String lock_contents = 
