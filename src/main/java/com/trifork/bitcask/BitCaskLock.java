@@ -44,9 +44,11 @@ public class BitCaskLock {
 
 	private RandomAccessFile file;
 	private boolean is_write_lock;
+	private File filename;
 
-	private BitCaskLock(RandomAccessFile file, boolean isWriteLock) {
+	private BitCaskLock(RandomAccessFile file, File filename, boolean isWriteLock) {
 		this.file = file;
+		this.filename = filename;
 		this.is_write_lock = isWriteLock;
 	}
 
@@ -193,6 +195,7 @@ public class BitCaskLock {
 
 			if (is_write_lock) {
 				file.close();
+				filename.delete();
 			}
 		}
 
@@ -213,7 +216,7 @@ public class BitCaskLock {
 		RandomAccessFile f = new RandomAccessFile(lockFilename,
 				is_write_lock ? "rws" : "r");
 
-		return new BitCaskLock(f, is_write_lock);
+		return new BitCaskLock(f, lockFilename, is_write_lock);
 	}
 
 	private static File lock_filename(Type type, File dirname) {

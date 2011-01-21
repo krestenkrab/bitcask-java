@@ -44,6 +44,55 @@ public class BitCask {
 	BitCaskOptions opts;
 	BitCaskKeyDir keydir;
 
+	public static BitCask open(File dirname, BitCaskOptions opts)
+			throws Exception {
+		BitCask result = new BitCask();
+
+		BitCaskFile.ensuredir(new File(dirname, "bitcask"));
+
+		if (opts.is_read_write()) {
+			BitCaskLock.delete_stale_lock(Type.WRITE, dirname);
+			result.write_file = BitCaskFile.FRESH_FILE;
+		}
+
+		result.dirname = dirname;
+		
+		BitCaskKeyDir keydir;
+		keydir = BitCaskKeyDir.keydir_new(dirname, opts.open_timeout_secs);
+		result.keydir = keydir;
+		if (!keydir.is_ready()) {			
+			File[] files = result.readable_files();
+			BitCask.scan_key_files(files, keydir);
+			keydir.mark_ready();
+		}
+
+		result.max_file_size = opts.max_file_size;
+		result.dirname = dirname;
+		result.opts = opts;
+
+		return result;
+	}
+	
+	
+	public void close() throws IOException {
+		
+		// release?
+		keydir = null;
+		
+		for (BitCaskFile read_file : read_files.values()) {
+			read_file.close();
+		}
+		
+		read_files.clear();
+		
+		if (write_file == null || write_file == BitCaskFile.FRESH_FILE) {
+			// ok
+		} else {
+			write_file.close();
+			write_lock.release();
+		}
+	}
+
 	public void put(ByteString key, ByteString value) throws IOException {
 		if (write_file == null) {
 			throw new IOException("read only");
@@ -120,7 +169,7 @@ public class BitCask {
 			return f;
 		}
 
-		f = BitCaskFile.open(fname, fileId);
+		f = BitCaskFile.open(dirname, fileId);
 		read_files.put(fname, f);
 
 		return f;
@@ -171,7 +220,7 @@ public class BitCask {
 		return files;
 	}
 
-	void scan_key_files(File[] files, final BitCaskKeyDir keydir)
+	static void scan_key_files(File[] files, final BitCaskKeyDir keydir)
 			throws Exception {
 
 		for (File f : files) {
@@ -192,5 +241,17 @@ public class BitCask {
 
 		}
 	}
+
+	public void put(String key, String value) throws IOException {
+		put(ByteString.copyFromUtf8(key), ByteString.copyFromUtf8(value));
+	}
+
+	public String getString(String key) throws IOException {
+		ByteString val = get(ByteString.copyFromUtf8(key));
+		if (val == null)
+			return null;
+		return val.toStringUtf8();
+	}
+
 
 }

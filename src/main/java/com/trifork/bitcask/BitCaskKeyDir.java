@@ -18,10 +18,13 @@
 
 package com.trifork.bitcask;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import com.google.protobuf.ByteString;
@@ -30,6 +33,7 @@ public class BitCaskKeyDir {
 
 	Map<ByteString, BitCaskEntry> map = new HashMap<ByteString, BitCaskEntry>();
 	ReadWriteLock rwl = new ReentrantReadWriteLock();
+	private boolean is_ready;
 
 	public boolean put(ByteString key, BitCaskEntry ent) {
 
@@ -67,5 +71,61 @@ public class BitCaskKeyDir {
 		}
 		
 	}
+
+	public static Map<File,BitCaskKeyDir> key_dirs = new HashMap<File, BitCaskKeyDir>();
+	public static Lock keydir_lock = new ReentrantLock();
+	
+	public static BitCaskKeyDir keydir_new(File dirname, int openTimeoutSecs) throws IOException {
+		
+		File abs_name = dirname.getAbsoluteFile();
+		BitCaskKeyDir dir;
+		keydir_lock.lock();
+		try {
+			
+			dir = key_dirs.get(abs_name);
+			if (dir == null) {
+				dir = new BitCaskKeyDir();
+				key_dirs.put(abs_name, dir);
+				return dir;
+			}
+			
+			
+		} finally {
+			keydir_lock.unlock();
+		}
+
+		if (dir.wait_for_ready(openTimeoutSecs)) {
+			return dir;
+		} else {
+			throw new IOException("timeout while waiting for keydir");
+		}
+	}
+
+	public synchronized boolean is_ready() {
+		return is_ready;
+	}
+	
+	public synchronized void mark_ready() {
+		is_ready = true;
+		this.notifyAll();
+	}
+	
+	public synchronized boolean wait_for_ready(int timeout_secs) {
+		long now = System.currentTimeMillis();
+		long abs_timeout = now + (timeout_secs * 1000);
+		
+		while (!is_ready && now < abs_timeout) {
+			try {
+				wait();
+			} catch (InterruptedException e) {
+				// ignore
+			}
+		
+			now = System.currentTimeMillis();
+		}
+		
+		return is_ready;
+	}
+	
 
 }

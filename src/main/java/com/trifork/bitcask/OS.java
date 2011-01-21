@@ -52,7 +52,7 @@ public class OS {
 				Pattern.CASE_INSENSITIVE);
 		Matcher matcher = pattern.matcher(processName);
 		if (matcher.matches()) {
-			result = new Integer(Integer.parseInt(matcher.group(1)));
+			result = Integer.valueOf(Integer.parseInt(matcher.group(1)));
 		}
 		return result;
 		

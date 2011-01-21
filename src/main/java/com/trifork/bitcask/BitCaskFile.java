@@ -382,7 +382,7 @@ public class BitCaskFile {
 	}
 
 	/** Create-if-not-exists for directory or fail */
-	private static void ensuredir(File dirname) {
+	static void ensuredir(File dirname) {
 		if (dirname.exists() && dirname.isDirectory())
 			return;
 		if (!dirname.mkdirs())
