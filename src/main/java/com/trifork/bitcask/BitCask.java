@@ -252,7 +252,7 @@ public class BitCask {
 		return val.toStringUtf8();
 	}
 
-	public <T> T fold(final EntryIter<T> entryIter, T acc) throws IOException {
+	public <T> T fold(final KeyValueIter<T> entryIter, T acc) throws IOException {
 
 		final int expiry_time = opts.expiry_time();
 		EntryIter<T> iter = new EntryIter<T>() {
@@ -274,8 +274,7 @@ public class BitCask {
 					return acc;
 				}
 
-				return entryIter.each(key, value, tstamp, entryPos, entrySize,
-						acc);
+				return entryIter.each(key, value, acc);
 
 			}
 		};

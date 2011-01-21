@@ -41,23 +41,41 @@ public class BitCaskTest {
 		
 		BitCask b = initDataset("/tmp/bc.test.fold", defaultDataset());
 	
+		final Map<ByteString, ByteString> l = contents(b);
+		
+		assertEquals(l, defaultDataset());
+		
+		b.close();
+	}
+
+	@Test
+	public void openTest() throws Exception {
+		
+		initDataset("/tmp/bc.test.open", defaultDataset()).close();
+	
+		BitCask b = BitCask.open(new File("/tmp/bc.test.open"), new BitCaskOptions());
+		final Map<ByteString, ByteString> l = contents(b);
+		
+		assertEquals(l, defaultDataset());
+		
+		b.close();
+	}
+
+	/** utility that slurps an entire bitcask into a HashMap */
+	private Map<ByteString, ByteString> contents(BitCask b) throws IOException {
 		final Map<ByteString,ByteString> l = new HashMap<ByteString, ByteString>();
 		
-		b.fold(new EntryIter<Void>() {
+		b.fold(new KeyValueIter<Void>() {
 
 			@Override
-			public Void each(ByteString key, ByteString value, int tstamp,
-					long entryPos, int entrySize, Void acc) {
+			public Void each(ByteString key, ByteString value, Void acc) {
 				
 				l.put(key, value);
 				return null;
 				
 			}
 		}, null);
-		
-		assertEquals(l, defaultDataset());
-		
-		b.close();
+		return l;
 	}
 	
 	private BitCask initDataset(String string,
