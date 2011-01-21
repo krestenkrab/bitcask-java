@@ -190,7 +190,7 @@ public class BitCask {
 		}
 	};
 
-	private File[] readable_files() {
+	File[] readable_files() {
 
 		final File writing_file = BitCaskLock.read_activefile(Type.WRITE,
 				dirname);
@@ -261,6 +261,7 @@ public class BitCask {
 			public T each(ByteString key, ByteString value, int tstamp,
 					long entryPos, int entrySize, T acc) {
 
+				
 				if (tstamp < expiry_time) {
 					return acc;
 				}
@@ -275,7 +276,6 @@ public class BitCask {
 				}
 
 				return entryIter.each(key, value, acc);
-
 			}
 		};
 
