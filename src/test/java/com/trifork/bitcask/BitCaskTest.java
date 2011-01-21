@@ -79,6 +79,37 @@ public class BitCaskTest {
 		b.close();
 	}
 
+	@Test
+	public void perfTest() throws Exception {
+		runtest();
+		runtest();
+	}
+
+	private void runtest() throws IOException, InterruptedException, Exception {
+		int n = 1024 * 100;
+		ByteString data = ByteString.copyFrom(new byte[1000]);
+		
+		File dirname = new File("/tmp/bc.test.perf");
+		rmdir(dirname);
+		BitCaskOptions opts = new BitCaskOptions();
+		opts.read_write = true;
+		BitCask b = BitCask.open(dirname, opts);
+		
+		System.gc();
+		long before = System.currentTimeMillis();
+		for (int i = 0; i < n; i++) {
+			b.put(bs("k"+i), data);
+		}
+		long after = System.currentTimeMillis();
+		double secs = (after-before)/1000.00;
+		
+		System.out.println(""+secs+" secs for writing "+n+" entries");
+		System.out.println(""+(1000.0*secs/n)+" ms per entry");
+		
+		b.close();
+	}
+	
+	
 	/** utility that slurps an entire bitcask into a HashMap */
 	private Map<ByteString, ByteString> contents(BitCask b) throws IOException {
 		final Map<ByteString, ByteString> l = new HashMap<ByteString, ByteString>();
