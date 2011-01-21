@@ -59,7 +59,7 @@ public class BitCaskFile {
 		this.wch = wch;
 		this.rch = rch;
 		this.wch_hint = wch_hint;
-		this.write_offset = new AtomicLong(wch.position());
+		this.write_offset = new AtomicLong(rch.size());
 	}
 	
 	public BitCaskFile() {
@@ -190,15 +190,9 @@ public class BitCaskFile {
 		
 		int tstamp = BitCaskFile.tstamp(filename);
 		
-		FileChannel wch = new FileOutputStream(filename, true).getChannel();
-		FileChannel wch_hint = new FileOutputStream(hint_filename(filename),
-				true).getChannel();
-		
-		
-
 		FileChannel rch = new RandomAccessFile(filename, "r").getChannel();
 
-		return new BitCaskFile(tstamp, filename, wch, wch_hint, rch);
+		return new BitCaskFile(tstamp, filename, null, null, rch);
 	}
 
 	/** Create a new bitcask file in named directory */
@@ -270,6 +264,8 @@ public class BitCaskFile {
 			int entry_length = HEADER_SIZE + key_len + val_len;
 			acc = iter.each(ByteString.copyFrom(kv, 0, key_len), 
 							ByteString.copyFrom(kv, key_len, val_len), tstamp, pos, entry_length, acc);
+			
+			pos += entry_length;
 		}
 
 		return acc;

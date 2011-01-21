@@ -56,11 +56,11 @@ public class BitCask {
 		}
 
 		result.dirname = dirname;
-		
+
 		BitCaskKeyDir keydir;
 		keydir = BitCaskKeyDir.keydir_new(dirname, opts.open_timeout_secs);
 		result.keydir = keydir;
-		if (!keydir.is_ready()) {			
+		if (!keydir.is_ready()) {
 			File[] files = result.readable_files();
 			BitCask.scan_key_files(files, keydir);
 			keydir.mark_ready();
@@ -72,19 +72,18 @@ public class BitCask {
 
 		return result;
 	}
-	
-	
+
 	public void close() throws IOException {
-		
+
 		// release?
 		keydir = null;
-		
+
 		for (BitCaskFile read_file : read_files.values()) {
 			read_file.close();
 		}
-		
+
 		read_files.clear();
-		
+
 		if (write_file == null || write_file == BitCaskFile.FRESH_FILE) {
 			// ok
 		} else {
@@ -253,5 +252,71 @@ public class BitCask {
 		return val.toStringUtf8();
 	}
 
+	public <T> T fold(final EntryIter<T> entryIter, T acc) throws IOException {
+
+		final int expiry_time = opts.expiry_time();
+		EntryIter<T> iter = new EntryIter<T>() {
+
+			@Override
+			public T each(ByteString key, ByteString value, int tstamp,
+					long entryPos, int entrySize, T acc) {
+
+				if (tstamp < expiry_time) {
+					return acc;
+				}
+				
+				BitCaskEntry ent = keydir.get(key);
+				if (entryPos != ent.offset) {
+					return acc;
+				}
+
+				if (value.equals(TOMBSTONE)) {
+					return acc;
+				}
+
+				return entryIter.each(key, value, tstamp, entryPos, entrySize,
+						acc);
+
+			}
+		};
+
+		BitCaskFile[] files = open_fold_files();
+		if (files != null) {
+			for (int i = 0; i < files.length; i++) {
+				acc = files[i].fold(iter, acc);
+			}
+		}
+
+		return acc;
+	}
+
+	private BitCaskFile[] open_fold_files() {
+		// TODO: retries ?
+		File[] files = list_data_files(null, null);
+		return open_files(files);
+	}
+
+	BitCaskFile[] open_files(File[] files) {
+		BitCaskFile[] out = new BitCaskFile[files.length];
+
+		for (int i = 0; i < out.length; i++) {
+
+			try {
+				out[i] = BitCaskFile.open(files[i]);
+			} catch (IOException e) {
+
+				for (int j = 0; j < i; j++) {
+					try {
+						out[j].close();
+					} catch (IOException e1) {
+					}
+				}
+
+				return null;
+			}
+		}
+
+		return out;
+	}
 
 }
