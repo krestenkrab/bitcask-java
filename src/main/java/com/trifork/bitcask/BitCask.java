@@ -237,7 +237,8 @@ public class BitCask {
 					return null;
 				}
 			}, null);
-
+			
+			file.close();
 		}
 	}
 
