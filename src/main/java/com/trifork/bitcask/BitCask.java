@@ -105,7 +105,12 @@ public class BitCask {
 			write_lock.write_activefile(nwf);
 
 			write_file = nwf;
-			read_files.put(last_write_file.filename, last_write_file);
+			if (read_files.get(last_write_file.filename) == null)
+                        {
+                           read_files.put(last_write_file.filename, last_write_file);
+                        } else {
+                           last_write_file.close();
+                        }
 			break;
 		}
 
